@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>업무 멀티 타이머 & 아카이브 (최종 가독성 패치본)</title>
+    <style>
+        :root {
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --border-color: #e0e0e0;
+            --text-color: #333;
+            --primary-color: #4caf50;
+            --blue-color: #007bff;
+            --excel-color: #1f7246;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        /* 탭 스타일 */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid #ccc;
+            margin-bottom: 25px;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: var(--blue-color);
+            border-bottom: 3px solid var(--blue-color);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        h2 { margin-top: 0; margin-bottom: 20px; font-size: 22px; color: #222; }
+
+        /* 타이머 화면 스타일 */
+        .top-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .task-row {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+            gap: 15px;
+        }
+
+        .task-num { font-size: 14px; font-weight: bold; color: #888; width: 25px; }
+        
+        .task-input {
+            flex: 2; padding: 10px; font-size: 15px;
+            border: 1px solid #ccc; border-radius: 6px; outline: none;
+        }
+        .task-input:focus { border-color: var(--primary-color); background-color: #f9fff9; }
+
+        .task-time { font-size: 18px; font-weight: bold; font-variant-numeric: tabular-nums; width: 90px; text-align: center; }
+
+        .gauge-container { flex: 3; height: 16px; background-color: #e9ecef; border-radius: 8px; overflow: hidden; }
+        .gauge-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #4caf50, #81c784); border-radius: 8px; transition: width 1s linear; }
+
+        .btn-group { display: flex; gap: 6px; width: 140px; justify-content: flex-end; }
+
+        button { padding: 8px 14px; font-size: 13px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
+        button:active { transform: scale(0.97); }
+
+        .btn-start { background-color: #4caf50; color: white; }
+        .btn-pause { background-color: #ff9800; color: white; display: none; }
+        .btn-reset { background-color: #e0e0e0; color: #333; }
+        
+        /* 외곽 버튼 레이아웃 스타일 */
+        .bottom-actions-area {
+            display: flex;
+            justify-content: center;
+            margin-top: 25px;
+            width: 100%;
+        }
+        
+        .btn-add { 
+            background-color: var(--blue-color); 
+            color: white; 
+            padding: 14px 40px; 
+            font-size: 15px; 
+            border-radius: 6px; 
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .btn-add:hover { background-color: #0056b3; }
+        .btn-save { background-color: #28a745; color: white; padding: 10px 20px; font-size: 14px; border-radius: 6px; }
+
+        /* 달력 및 보관함 레이아웃 */
+        .archive-layout {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 25px;
+        }
+
+        .calendar-section {
+            flex: 1;
+            max-width: 350px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            text-align: center;
+        }
+
+        .calendar-day-label { font-weight: bold; font-size: 12px; color: #666; padding: 5px 0; }
+        
+        .calendar-day {
+            padding: 10px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .calendar-day:hover { background: #e2e6ea; }
+        .calendar-day.has-data { background: #d4edda; color: #155724; font-weight: bold; }
+        .calendar-day.selected { background: var(--blue-color) !important; color: white !important; }
+
+        .details-section {
+            flex: 1.5;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            min-height: 320px;
+            box-sizing: border-box;
+        }
+
+        /* 엑셀 서식 스타일의 웹 테이블 패치 */
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        .report-table th {
+            background-color: #f8f9fa;
+            color: #555;
+            font-weight: bold;
+            padding: 10px 12px;
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .report-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            color: #333;
+        }
+
+        .report-table tr:hover {
+            background-color: #fcfcfc;
+        }
+
+        .col-num { width: 10%; text-align: center; color: #888; font-weight: bold; }
+        .col-text { width: 65%; font-weight: 500; }
+        .col-time { width: 25%; text-align: center; font-weight: bold; color: var(--blue-color); font-variant-numeric: tabular-nums; }
+
+        .history-list {
+            overflow-y: auto;
+            max-height: 260px;
+        }
+
+        .archive-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .btn-excel {
+            background-color: var(--excel-color);
+            color: white;
+            padding: 14px 20px;
+            font-size: 15px;
+            border-radius: 6px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .btn-excel:hover { background-color: #165232; }
+        
+        .btn-excel-month {
+            background-color: #ffc107;
+            color: #212529;
+            font-weight: bold;
+        }
+        .btn-excel-month:hover { background-color: #e0a800; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('timer-tab')">오늘의 타이머</button>
+        <button class="tab-btn" onclick="switchTab('archive-tab')">월별 기록 보관함</button>
+    </div>
+
+    <div id="timer-tab" class="tab-content active">
+        <div class="top-actions">
+            <h2>오늘의 업무 시간 체크</h2>
+            <button class="btn-save" onclick="saveTodayData()">📝 일일 업무 일지 작성 완료</button>
+        </div>
+        <div id="task-list"></div>
+        
+        <div class="bottom-actions-area">
+            <button class="btn-add" onclick="addNewTask()">+ 업무 추가하기</button>
+        </div>
+    </div>
+
+    <div id="archive-tab" class="tab-content">
+        <div class="archive-layout">
+            <div class="calendar-section">
+                <div class="calendar-header">
+                    <button onclick="changeMonth(-1)">◀</button>
+                    <span id="calendar-month-year" style="font-weight: bold; font-size: 16px;"></span>
+                    <button onclick="changeMonth(1)">▶</button>
+                </div>
+                <div class="calendar-grid" id="calendar-grid"></div>
+            </div>
+            <div class="details-section">
+                <h3 id="selected-date-title" style="margin-top:0; color:#111; font-size:18px; border-bottom: 2px solid var(--blue-color); padding-bottom: 8px;">날짜를 선택해 주세요.</h3>
+                <div id="history-details" class="history-list">
+                    </div>
+            </div>
+        </div>
+        
+        <div class="archive-actions">
+            <button class="btn-excel" id="excelDayBtn" style="display:none;" onclick="downloadDayCSV()">📊 선택한 일자 엑셀 다운로드</button>
+            <button class="btn-excel btn-excel-month" id="excelMonthBtn" onclick="downloadMonthCSV()">📅 <span id="btn-month-txt"></span>월 전체 통합 엑셀 다운로드</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const GAUGE_MAX_MINUTES = 60;
+    const maxSeconds = GAUGE_MAX_MINUTES * 60;
+    let tasks = [];
+    
+    let currentCalDate = new Date();
+    let selectedDateStr = "";
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        if(tabId === 'timer-tab') document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            renderCalendar();
+        }
+        document.getElementById(tabId).classList.add('active');
+    }
+
+    function createTaskRow(index) {
+        tasks.push({ seconds: 0, interval: null, isRunning: false });
+        const row = document.createElement('div');
+        row.className = 'task-row';
+        row.innerHTML = `
+            <div class="task-num">${index + 1}</div>
+            <input type="text" class="task-input" id="input-${index}" placeholder="업무 내용을 입력하세요">
+            <div class="task-time" id="time-${index}">00:00:00</div>
+            <div class="gauge-container"><div class="gauge-bar" id="gauge-${index}"></div></div>
+            <div class="btn-group">
+                <button class="btn-start" id="start-${index}" onclick="toggleTask(${index})">시작</button>
+                <button class="btn-pause" id="pause-${index}" onclick="toggleTask(${index})">정지</button>
+                <button class="btn-reset" onclick="resetTask(${index})">리셋</button>
+            </div>
+        `;
+        document.getElementById('task-list').appendChild(row);
+    }
+
+    for (let i = 0; i < 10; i++) createTaskRow(i);
+    function addNewTask() { createTaskRow(tasks.length); }
+
+    function toggleTask(index) {
+        const task = tasks[index];
+        const startBtn = document.getElementById(`start-${index}`);
+        const pauseBtn = document.getElementById(`pause-${index}`);
+        if (!task.isRunning) {
+            task.isRunning = true; startBtn.style.display = 'none'; pauseBtn.style.display = 'inline-block';
+            task.interval = setInterval(() => { task.seconds++; updateRowUI(index); }, 1000);
+        } else {
+            task.isRunning = false; clearInterval(task.interval);
+            startBtn.style.display = 'inline-block'; startBtn.textContent = '계속'; pauseBtn.style.display = 'none';
+        }
+    }
+
+    function updateRowUI(index) {
+        const task = tasks[index];
+        const hrs = String(Math.floor(task.seconds / 3600)).padStart(2, '0');
+        const mins = String(Math.floor((task.seconds % 3600) / 60)).padStart(2, '0');
+        const secs = String(task.seconds % 60).padStart(2, '0');
+        document.getElementById(`time-${index}`).textContent = `${hrs}:${mins}:${secs}`;
+        const percentage = Math.min((task.seconds / maxSeconds) * 100, 100);
+        const gauge = document.getElementById(`gauge-${index}`);
+        gauge.style.width = `${percentage}%`;
+        if (percentage >= 100) gauge.style.background = '#f44336';
+        else if (percentage >= 80) gauge.style.background = '#ff9800';
+        else gauge.style.background = 'linear-gradient(90deg, #4caf50, #81c784)';
+    }
+
+    function resetTask(index) {
+        if (confirm("초기화하시겠습니까?")) {
+            clearInterval(tasks[index].interval);
+            tasks[index].seconds = 0; tasks[index].isRunning = false;
+            updateRowUI(index);
+            document.getElementById(`start-${index}`).style.display = 'inline-block';
+            document.getElementById(`start-${index}`).textContent = '시작';
+            document.getElementById(`pause-${index}`).style.display = 'none';
+        }
+    }
+
+    function saveTodayData() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        let dataToSave = [];
+
+        tasks.forEach((task, idx) => {
+            const content = document.getElementById(`input-${idx}`).value.trim();
+            if (content || task.seconds > 0) {
+                const hrs = String(Math.floor(task.seconds / 3600)).padStart(2, '0');
+                const mins = String(Math.floor((task.seconds % 3600) / 60)).padStart(2, '0');
+                const secs = String(task.seconds % 60).padStart(2, '0');
+                dataToSave.push({ text: content || `미지정 업무 (${idx+1})`, time: `${hrs}:${mins}:${secs}` });
+            }
+        });
+
+        if(dataToSave.length === 0) { alert("저장할 기록이 없습니다."); return; }
+        
+        localStorage.setItem(`work_log_${todayStr}`, JSON.stringify(dataToSave));
+        alert(`${todayStr} 일지 기록이 안전하게 저장되었습니다.`);
+    }
+
+    function renderCalendar() {
+        const year = currentCalDate.getFullYear();
+        const month = currentCalDate.getMonth();
+        document.getElementById('calendar-month-year').textContent = `${year}년 ${month + 1}월`;
+        document.getElementById('btn-month-txt').textContent = month + 1;
+
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = '';
+
+        const weekLabels = ['일', '월', '화', '수', '목', '금', '토'];
+        weekLabels.forEach(lbl => {
+            const el = document.createElement('div'); el.className = 'calendar-day-label'; el.textContent = lbl; grid.appendChild(el);
+        });
+
+        const firstDayIndex = new Date(year, month, 1).getDay();
+        const lastDay = new Date(year, month + 1, 0).getDate();
+
+        for (let i = 0; i < firstDayIndex; i++) { grid.appendChild(document.createElement('div')); }
+
+        for (let day = 1; day <= lastDay; day++) {
+            const dayEl = document.createElement('div');
+            dayEl.className = 'calendar-day';
+            dayEl.textContent = day;
+
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            
+            if (localStorage.getItem(`work_log_${dateStr}`)) { dayEl.classList.add('has-data'); }
+            if (dateStr === selectedDateStr) dayEl.classList.add('selected');
+
+            dayEl.onclick = () => {
+                document.querySelectorAll('.calendar-day').forEach(d => d.classList.remove('selected'));
+                dayEl.classList.add('selected');
+                selectedDateStr = dateStr;
+                showHistoryDetails(dateStr);
+            };
+
+            grid.appendChild(dayEl);
+        }
+    }
+
+    function changeMonth(direction) {
+        currentCalDate.setMonth(currentCalDate.getMonth() + direction);
+        renderCalendar();
+    }
+
+    /* 핵심 개선: 표(Table) 서식 렌더링으로 가독성 대폭 향상 */
+    function showHistoryDetails(dateStr) {
+        document.getElementById('selected-date-title').textContent = `${dateStr} 상세 업무 기록`;
+        const detailsContainer = document.getElementById('history-details');
+        const excelDayBtn = document.getElementById('excelDayBtn');
+        const savedData = localStorage.getItem(`work_log_${dateStr}`);
+
+        if (!savedData) {
+            detailsContainer.innerHTML = ''; 
+            excelDayBtn.style.display = 'none';
+            return;
+        }
+
+        const parsedData = JSON.parse(savedData);
+        
+        // 표 구조 틀 짜기
+        let tableHtml = `
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th style="text-align:center;">No.</th>
+                        <th>업무 내용</th>
+                        <th style="text-align:center;">소요 시간</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // 행 데이터 채우기
+        parsedData.forEach((item, index) => {
+            tableHtml += `
+                <tr>
+                    <td class="col-num">${index + 1}</td>
+                    <td class="col-text">📌 ${item.text}</td>
+                    <td class="col-time">${item.time}</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `
+                </tbody>
+            </table>
+        `;
+
+        detailsContainer.innerHTML = tableHtml;
+        excelDayBtn.style.display = 'block';
+    }
+
+    function triggerDownload(csvContent, fileName) {
+        const BOM = "\uFEFF";
+        const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+
+    function downloadDayCSV() {
+        const savedData = localStorage.getItem(`work_log_${selectedDateStr}`);
+        if (!savedData) return;
+        const parsedData = JSON.parse(savedData);
+        
+        let csvContent = "날짜,업무 내용,소요 시간\n";
+        parsedData.forEach(item => {
+            const cleanText = item.text.replace(/"/g, '""');
+            csvContent += `${selectedDateStr},"${cleanText}",${item.time}\n`;
+        });
+        triggerDownload(csvContent, `업무보고_일별_${selectedDateStr}.csv`);
+    }
+
+    function downloadMonthCSV() {
+        const year = currentCalDate.getFullYear();
+        const month = currentCalDate.getMonth();
+        const displayMonth = month + 1;
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        
+        let csvContent = "날짜,업무 내용,소요 시간\n";
+        let hasAnyData = false;
+
+        for (let day = 1; day <= lastDay; day++) {
+            const dateStr = `${year}-${String(displayMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const savedData = localStorage.getItem(`work_log_${dateStr}`);
+            
+            if (savedData) {
+                hasAnyData = true;
+                const parsedData = JSON.parse(savedData);
+                parsedData.forEach(item => {
+                    const cleanText = item.text.replace(/"/g, '""');
+                    csvContent += `${dateStr},"${cleanText}",${item.time}\n`;
+                });
+            }
+        }
+
+        if (!hasAnyData) {
+            alert(`${year}년 ${displayMonth}월에 저장된 타이머 데이터가 전혀 없습니다.`);
+            return;
+        }
+
+        triggerDownload(csvContent, `업무보고_월별통합_${year}년_${displayMonth}월.csv`);
+    }
+</script>
+
+</body>
+</html>
