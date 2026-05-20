@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>업무 멀티 타이머 & 아카이브 (자동 복구 패치본)</title>
+    <title>업무 멀티 타이머 & 아카이브 (전체 초기화 패치본)</title>
     <style>
         :root {
             --bg-color: #f4f6f9;
@@ -13,6 +13,7 @@
             --primary-color: #4caf50;
             --blue-color: #007bff;
             --excel-color: #1f7246;
+            --danger-color: #dc3545;
         }
 
         body {
@@ -73,6 +74,11 @@
             margin-bottom: 15px;
         }
 
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
         .task-row {
             display: flex;
             align-items: center;
@@ -123,6 +129,10 @@
         }
         .btn-add:hover { background-color: #0056b3; }
         .btn-save { background-color: #28a745; color: white; padding: 10px 20px; font-size: 14px; border-radius: 6px; }
+        
+        /* 새 기능: 전체 초기화 버튼 스타일 */
+        .btn-clear-all { background-color: #6c757d; color: white; padding: 10px 20px; font-size: 14px; border-radius: 6px; }
+        .btn-clear-all:hover { background-color: #5a6268; }
 
         /* 달력 및 보관함 레이아웃 */
         .archive-layout {
@@ -248,7 +258,10 @@
     <div id="timer-tab" class="tab-content active">
         <div class="top-actions">
             <h2>오늘의 업무 시간 체크</h2>
-            <button class="btn-save" onclick="saveTodayData()">📝 일일 업무 일지 작성 완료</button>
+            <div class="action-buttons">
+                <button class="btn-clear-all" onclick="resetAllTasks()">🧹 전체 초기화</button>
+                <button class="btn-save" onclick="saveTodayData()">📝 일일 업무 일지 작성 완료</button>
+            </div>
         </div>
         <div id="task-list"></div>
         
@@ -300,7 +313,6 @@
         document.getElementById(tabId).classList.add('active');
     }
 
-    // 초기 렌더링 및 행 생성 규칙 수정 (기존 데이터 로드 연동)
     function createTaskRow(index, savedText = '', savedSeconds = 0) {
         tasks.push({ seconds: savedSeconds, interval: null, isRunning: false });
         const row = document.createElement('div');
@@ -320,7 +332,6 @@
         if(savedSeconds > 0) updateRowUI(index);
     }
 
-    // 앱 시작 시 상태 복원 기능 추가
     function initApp() {
         const todayStr = new Date().toISOString().split('T')[0];
         const stateData = localStorage.getItem(`timer_state_${todayStr}`);
@@ -335,7 +346,6 @@
         }
     }
 
-    // 실시간 타이머 화면 상태 저장 (새로고침 방어용)
     function saveCurrentState() {
         const todayStr = new Date().toISOString().split('T')[0];
         let stateToSave = [];
@@ -344,6 +354,27 @@
             stateToSave.push({ text: text, seconds: task.seconds });
         });
         localStorage.setItem(`timer_state_${todayStr}`, JSON.stringify(stateToSave));
+    }
+
+    /* 새 기능: 화면 전체 데이터를 날리는 초기화 로직 구현 */
+    function resetAllTasks() {
+        if (confirm("🚨 정말 오늘의 모든 타이머와 입력 내용을 초기화하시겠습니까?\n(보관함에 최종 완성본으로 저장해 둔 지난 기록들은 지워지지 않습니다.)")) {
+            tasks.forEach((task, index) => {
+                clearInterval(task.interval);
+                task.seconds = 0;
+                task.isRunning = false;
+                
+                // UI 원복
+                updateRowUI(index);
+                document.getElementById(`input-${index}`).value = '';
+                document.getElementById(`start-${index}`).style.display = 'inline-block';
+                document.getElementById(`start-${index}`).textContent = '시작';
+                document.getElementById(`pause-${index}`).style.display = 'none';
+            });
+            
+            // 실시간 백업 캐시 데이터도 초기화
+            saveCurrentState();
+        }
     }
 
     function toggleTask(index) {
@@ -355,7 +386,7 @@
             task.interval = setInterval(() => { 
                 task.seconds++; 
                 updateRowUI(index); 
-                if(task.seconds % 5 === 0) saveCurrentState(); // 5초마다 자동 임시저장
+                if(task.seconds % 5 === 0) saveCurrentState(); 
             }, 1000);
         } else {
             task.isRunning = false; clearInterval(task.interval);
@@ -372,10 +403,12 @@
         document.getElementById(`time-${index}`).textContent = `${hrs}:${mins}:${secs}`;
         const percentage = Math.min((task.seconds / maxSeconds) * 100, 100);
         const gauge = document.getElementById(`gauge-${index}`);
-        gauge.style.width = `${percentage}%`;
-        if (percentage >= 100) gauge.style.background = '#f44336';
-        else if (percentage >= 80) gauge.style.background = '#ff9800';
-        else gauge.style.background = 'linear-gradient(90deg, #4caf50, #81c784)';
+        if (gauge) {
+            gauge.style.width = `${percentage}%`;
+            if (percentage >= 100) gauge.style.background = '#f44336';
+            else if (percentage >= 80) gauge.style.background = '#ff9800';
+            else gauge.style.background = 'linear-gradient(90deg, #4caf50, #81c784)';
+        }
     }
 
     function resetTask(index) {
@@ -564,7 +597,6 @@
         triggerDownload(csvContent, `업무보고_월별통합_${year}년_${displayMonth}월.csv`);
     }
 
-    // 초기화 실행
     initApp();
 </script>
 
