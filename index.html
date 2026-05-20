@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>업무 타이머</title>
+    <title>업무 멀티 타이머 & 아카이브 (자동 복구 패치본)</title>
     <style>
         :root {
             --bg-color: #f4f6f9;
@@ -174,7 +174,6 @@
             box-sizing: border-box;
         }
 
-        /* 엑셀 서식 스타일의 웹 테이블 패치 */
         .report-table {
             width: 100%;
             border-collapse: collapse;
@@ -270,8 +269,7 @@
             </div>
             <div class="details-section">
                 <h3 id="selected-date-title" style="margin-top:0; color:#111; font-size:18px; border-bottom: 2px solid var(--blue-color); padding-bottom: 8px;">날짜를 선택해 주세요.</h3>
-                <div id="history-details" class="history-list">
-                    </div>
+                <div id="history-details" class="history-list"></div>
             </div>
         </div>
         
@@ -302,13 +300,14 @@
         document.getElementById(tabId).classList.add('active');
     }
 
-    function createTaskRow(index) {
-        tasks.push({ seconds: 0, interval: null, isRunning: false });
+    // 초기 렌더링 및 행 생성 규칙 수정 (기존 데이터 로드 연동)
+    function createTaskRow(index, savedText = '', savedSeconds = 0) {
+        tasks.push({ seconds: savedSeconds, interval: null, isRunning: false });
         const row = document.createElement('div');
         row.className = 'task-row';
         row.innerHTML = `
             <div class="task-num">${index + 1}</div>
-            <input type="text" class="task-input" id="input-${index}" placeholder="업무 내용을 입력하세요">
+            <input type="text" class="task-input" id="input-${index}" value="${savedText}" placeholder="업무 내용을 입력하세요" oninput="saveCurrentState()">
             <div class="task-time" id="time-${index}">00:00:00</div>
             <div class="gauge-container"><div class="gauge-bar" id="gauge-${index}"></div></div>
             <div class="btn-group">
@@ -318,10 +317,34 @@
             </div>
         `;
         document.getElementById('task-list').appendChild(row);
+        if(savedSeconds > 0) updateRowUI(index);
     }
 
-    for (let i = 0; i < 10; i++) createTaskRow(i);
-    function addNewTask() { createTaskRow(tasks.length); }
+    // 앱 시작 시 상태 복원 기능 추가
+    function initApp() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const stateData = localStorage.getItem(`timer_state_${todayStr}`);
+        
+        if (stateData) {
+            const parsedState = JSON.parse(stateData);
+            parsedState.forEach((taskState, i) => {
+                createTaskRow(i, taskState.text, taskState.seconds);
+            });
+        } else {
+            for (let i = 0; i < 10; i++) createTaskRow(i);
+        }
+    }
+
+    // 실시간 타이머 화면 상태 저장 (새로고침 방어용)
+    function saveCurrentState() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        let stateToSave = [];
+        tasks.forEach((task, idx) => {
+            const text = document.getElementById(`input-${idx}`).value;
+            stateToSave.push({ text: text, seconds: task.seconds });
+        });
+        localStorage.setItem(`timer_state_${todayStr}`, JSON.stringify(stateToSave));
+    }
 
     function toggleTask(index) {
         const task = tasks[index];
@@ -329,10 +352,15 @@
         const pauseBtn = document.getElementById(`pause-${index}`);
         if (!task.isRunning) {
             task.isRunning = true; startBtn.style.display = 'none'; pauseBtn.style.display = 'inline-block';
-            task.interval = setInterval(() => { task.seconds++; updateRowUI(index); }, 1000);
+            task.interval = setInterval(() => { 
+                task.seconds++; 
+                updateRowUI(index); 
+                if(task.seconds % 5 === 0) saveCurrentState(); // 5초마다 자동 임시저장
+            }, 1000);
         } else {
             task.isRunning = false; clearInterval(task.interval);
             startBtn.style.display = 'inline-block'; startBtn.textContent = '계속'; pauseBtn.style.display = 'none';
+            saveCurrentState();
         }
     }
 
@@ -358,7 +386,13 @@
             document.getElementById(`start-${index}`).style.display = 'inline-block';
             document.getElementById(`start-${index}`).textContent = '시작';
             document.getElementById(`pause-${index}`).style.display = 'none';
+            saveCurrentState();
         }
+    }
+
+    function addNewTask() { 
+        createTaskRow(tasks.length); 
+        saveCurrentState();
     }
 
     function saveTodayData() {
@@ -378,7 +412,7 @@
         if(dataToSave.length === 0) { alert("저장할 기록이 없습니다."); return; }
         
         localStorage.setItem(`work_log_${todayStr}`, JSON.stringify(dataToSave));
-        alert(`${todayStr} 일지 기록이 안전하게 저장되었습니다.`);
+        alert(`${todayStr} 일지 기록이 보관함에 최종 저장되었습니다.`);
     }
 
     function renderCalendar() {
@@ -426,7 +460,6 @@
         renderCalendar();
     }
 
-    /* 핵심 개선: 표(Table) 서식 렌더링으로 가독성 대폭 향상 */
     function showHistoryDetails(dateStr) {
         document.getElementById('selected-date-title').textContent = `${dateStr} 상세 업무 기록`;
         const detailsContainer = document.getElementById('history-details');
@@ -441,7 +474,6 @@
 
         const parsedData = JSON.parse(savedData);
         
-        // 표 구조 틀 짜기
         let tableHtml = `
             <table class="report-table">
                 <thead>
@@ -454,7 +486,6 @@
                 <tbody>
         `;
 
-        // 행 데이터 채우기
         parsedData.forEach((item, index) => {
             tableHtml += `
                 <tr>
@@ -532,6 +563,9 @@
 
         triggerDownload(csvContent, `업무보고_월별통합_${year}년_${displayMonth}월.csv`);
     }
+
+    // 초기화 실행
+    initApp();
 </script>
 
 </body>
